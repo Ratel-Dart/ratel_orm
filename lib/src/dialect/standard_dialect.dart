@@ -38,5 +38,5 @@ class StandardDialect implements SqlDialect {
   }
 
   @override
-  String quoteIdentifier(String name) => '"$name"';
+  String quoteIdentifier(String name) => '"${name.replaceAll('"', '""')}"';
 }

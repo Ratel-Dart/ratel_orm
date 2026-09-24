@@ -97,7 +97,7 @@ class SqliteDriver extends RatelDriver {
             ? statement.select()
             : statement.selectWith(StatementParameters.named({
                 for (final entry in parameters.entries)
-                  '@${entry.key}': entry.value,
+                  '@${entry.key}': _bindable(entry.value),
               }));
         final wrote = !statement.isReadOnly;
         return QueryResult(
@@ -105,11 +105,32 @@ class SqliteDriver extends RatelDriver {
           affectedRows: wrote ? db.updatedRows : 0,
           lastInsertId: wrote ? db.lastInsertRowId : null,
         );
+      } on ArgumentError catch (e) {
+        throw QueryExecutionException(
+          'SQLite could not bind the query parameters',
+          sql: sql,
+          cause: e,
+        );
       } finally {
         statement.dispose();
       }
     } on SqliteException catch (e) {
       throw QueryExecutionException('SQLite query failed', sql: sql, cause: e);
     }
+  }
+
+  static Object? _bindable(Object? value) =>
+      value is DateTime ? _timestamp(value.toUtc()) : value;
+
+  static String _timestamp(DateTime utc) {
+    String pad(int number, int width) => number.toString().padLeft(width, '0');
+    final year = utc.year;
+    final yearText = year >= 0 && year <= 9999
+        ? pad(year, 4)
+        : '${year < 0 ? '-' : '+'}${pad(year.abs(), 6)}';
+    final fraction = pad(utc.millisecond * 1000 + utc.microsecond, 6);
+    return '$yearText-${pad(utc.month, 2)}-${pad(utc.day, 2)}'
+        'T${pad(utc.hour, 2)}:${pad(utc.minute, 2)}:${pad(utc.second, 2)}'
+        '.${fraction}Z';
   }
 }

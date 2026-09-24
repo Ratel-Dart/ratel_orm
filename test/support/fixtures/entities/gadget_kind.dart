@@ -1,0 +1,1 @@
+enum GadgetKind { tool, toy }

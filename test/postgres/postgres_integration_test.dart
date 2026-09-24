@@ -5,9 +5,13 @@ import 'package:ratel_orm/postgres.dart';
 import 'package:ratel_orm/ratel_orm.dart';
 import 'package:test/test.dart';
 
+import '../support/driver_conformance.dart';
 import '../support/fixtures/repositories/labeled_widget_repository.dart';
+import '../support/test_entities.dart';
 
 void main() {
+  TestEntities.install();
+
   final skip = Platform.environment['DB_HOST'] == null
       ? 'set DB_HOST/DB_NAME/DB_USER/DB_PASSWORD to run the Postgres integration'
       : false;
@@ -62,9 +66,8 @@ void main() {
         'CREATE TABLE ratel_repo_widgets (id int PRIMARY KEY, label text)',
       );
 
-      final rows = await LabeledWidgetRepository(driver).insert(7, 'omega');
-      expect(rows, isNotNull);
-      expect(rows!.single.id, 7);
+      final rows = await LabeledWidgetRepository(driver).add(7, 'omega');
+      expect(rows.single.id, 7);
       expect(rows.single.label, 'omega');
 
       await driver.query('DROP TABLE ratel_repo_widgets');
@@ -128,5 +131,43 @@ void main() {
       await driver.query('DROP TABLE ratel_tx_widgets');
       await driver.close();
     }, skip: skip);
+
+    test('binds a local DateTime as its instant in timestamp columns',
+        () async {
+      final driver = PostgresDriver.fromEnv();
+      await driver.open();
+      addTearDown(driver.close);
+
+      await driver.query('DROP TABLE IF EXISTS ratel_stamps');
+      await driver.query(
+        'CREATE TABLE ratel_stamps (plain timestamp, zoned timestamptz)',
+      );
+      addTearDown(() => driver.query('DROP TABLE IF EXISTS ratel_stamps'));
+
+      final instant = DateTime.utc(2024, 5, 6, 7, 8, 9, 10, 11);
+      const insert =
+          'INSERT INTO ratel_stamps (plain, zoned) VALUES (@plain, @zoned)';
+      final local = {'plain': instant.toLocal(), 'zoned': instant.toLocal()};
+      await driver.query(insert, parameters: local);
+      await driver.transaction(
+        (session) => session.query(insert, parameters: local),
+      );
+
+      final stored =
+          await driver.query('SELECT plain, zoned FROM ratel_stamps');
+      for (final row in stored.rows) {
+        expect((row['plain']! as DateTime).isAtSameMomentAs(instant), isTrue);
+        expect((row['zoned']! as DateTime).isAtSameMomentAs(instant), isTrue);
+      }
+      final matched = await driver.query(
+        'SELECT count(*) AS total FROM ratel_stamps WHERE plain = @at',
+        parameters: {'at': instant.toLocal()},
+      );
+      expect(matched.rows.single['total'], 2);
+    }, skip: skip);
   });
+
+  group('PostgresDriver conformance against a live server', () {
+    DriverConformance.run(PostgresDriver.fromEnv);
+  }, skip: skip);
 }
