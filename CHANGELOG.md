@@ -1,5 +1,9 @@
 ## 0.2.0-dev.1 (unreleased)
 
+- `example/` is a program that uses the ORM without the framework. CI runs
+  it through the ratel CLI: `ratel test` against Postgres and SQLite, `ratel
+  build` and the built binary, and a plain `dart run` that must fail and point
+  at `ratel dev`.
 - **Breaking:** `RatelRepository<T>` is now `RatelRepository<T, ID>`, with
   both bounded by `Object`, and rows are mapped through the installed entity
   definition of `T`. `fromRow` is gone from the repository. Instead, annotate
