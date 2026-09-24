@@ -4,6 +4,7 @@ import 'package:ratel_orm/src/postgres/postgres_session.dart';
 import 'package:test/test.dart';
 
 import '../support/failing_tx_session.dart';
+import '../support/recording_tx_session.dart';
 
 void main() {
   group('PostgresSession', () {
@@ -41,6 +42,27 @@ void main() {
               .having((e) => e.cause, 'cause', same(error)),
         ),
       );
+    });
+
+    test('binds a DateTime parameter in UTC', () async {
+      final tx = RecordingTxSession();
+      final instant = DateTime.utc(2024, 5, 6, 7, 8, 9, 10);
+      await PostgresSession(tx).query(
+        'SELECT @at AS at',
+        parameters: {'at': instant.toLocal(), 'name': 'ada'},
+      );
+      final bound = tx.lastParameters! as Map<String, Object?>;
+      expect((bound['at']! as DateTime).isUtc, isTrue);
+      expect(bound['at'], instant);
+      expect(bound['name'], 'ada');
+    });
+
+    test('reports whether its transaction is still open', () {
+      final tx = RecordingTxSession();
+      final session = PostgresSession(tx);
+      expect(session.isOpen, isTrue);
+      tx.open = false;
+      expect(session.isOpen, isFalse);
     });
   });
 }

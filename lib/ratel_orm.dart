@@ -1,3 +1,7 @@
+export 'src/annotations/column.dart';
+export 'src/annotations/entity.dart';
+export 'src/annotations/id.dart';
+export 'src/annotations/transient.dart';
 export 'src/dialect/postgres_dialect.dart';
 export 'src/dialect/sql_dialect.dart';
 export 'src/dialect/sqlite_dialect.dart';

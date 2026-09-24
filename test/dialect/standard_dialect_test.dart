@@ -100,6 +100,11 @@ void main() {
       expect(const SqliteDialect().quoteIdentifier('col'), '"col"');
     });
 
+    test('doubles a double quote inside an identifier', () {
+      expect(const PostgresDialect().quoteIdentifier('we"ird'), '"we""ird"');
+      expect(const SqliteDialect().quoteIdentifier('"'), '""""');
+    });
+
     test('limitOffset builds the pagination fragment', () {
       expect(
         const StandardDialect().limitOffset(limit: 10, offset: 20),

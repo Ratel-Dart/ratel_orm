@@ -4,9 +4,11 @@ import 'package:test/test.dart';
 
 import '../support/fixtures/repositories/person_repository.dart';
 import '../support/sqlite_test_library.dart';
+import '../support/test_entities.dart';
 
 void main() {
   setUpAll(SqliteTestLibrary.useSystemLibrary);
+  TestEntities.install();
 
   group('build', () {
     test('Postgres quotes identifiers and parameterizes values', () {
@@ -55,8 +57,7 @@ void main() {
     final adults = await PersonRepository(driver)
         .find(Query.from('person').where('age', '>=', 30).orderBy('name'));
 
-    expect(adults, isNotNull);
-    expect(adults!.map((p) => p.name).toList(), ['ann', 'cid']);
+    expect(adults.map((p) => p.name).toList(), ['ann', 'cid']);
     expect(adults.map((p) => p.age).toList(), [30, 40]);
     await driver.close();
   });

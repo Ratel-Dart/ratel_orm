@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:postgres/postgres.dart';
@@ -9,6 +10,7 @@ import '../driver/ratel_driver.dart';
 import '../driver/ratel_session.dart';
 import '../exceptions/database_exception.dart';
 import '../exceptions/query_execution_exception.dart';
+import 'postgres_parameters.dart';
 import 'postgres_result_mapper.dart';
 import 'postgres_session.dart';
 import 'ssl_mode_parser.dart';
@@ -29,6 +31,8 @@ class PostgresDriver extends RatelDriver {
   final int maxConnections;
 
   Pool? _pool;
+
+  final Object _transaction = Object();
 
   PostgresDriver({
     required this.host,
@@ -106,11 +110,18 @@ class PostgresDriver extends RatelDriver {
   @override
   Future<QueryResult> query(String sql,
       {Map<String, Object?>? parameters}) async {
+    final session = Zone.current[_transaction];
+    if (session is PostgresSession && session.isOpen) {
+      return session.query(sql, parameters: parameters);
+    }
     final pool = await _openPool;
     try {
       final result = (parameters == null || parameters.isEmpty)
           ? await pool.execute(sql)
-          : await pool.execute(Sql.named(sql), parameters: parameters);
+          : await pool.execute(
+              Sql.named(sql),
+              parameters: PostgresParameters.bindable(parameters),
+            );
       return PostgresResultMapper.toQueryResult(result);
     } on DatabaseException {
       rethrow;
@@ -129,7 +140,11 @@ class PostgresDriver extends RatelDriver {
     try {
       return await pool.runTx((tx) async {
         statement = null;
-        final result = await action(PostgresSession(tx));
+        final session = PostgresSession(tx);
+        final result = await runZoned(
+          () => action(session),
+          zoneValues: {_transaction: session},
+        );
         statement = 'COMMIT';
         return result;
       });
