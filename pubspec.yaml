@@ -4,16 +4,14 @@ description: >-
   drivers, repositories with explicit row mapping, a query builder and
   migrations. Works with or without the Ratel framework.
 version: 0.1.0-dev.1
-repository: https://github.com/Ratel-Dart/Ratel
-issue_tracker: https://github.com/Ratel-Dart/Ratel/issues
-homepage: https://github.com/Ratel-Dart/Ratel
+repository: https://github.com/Ratel-Dart/ratel_orm
+issue_tracker: https://github.com/Ratel-Dart/ratel_orm/issues
+homepage: https://github.com/Ratel-Dart/ratel_orm
 topics:
   - database
   - orm
   - sql
   - backend
-
-resolution: workspace
 
 environment:
   sdk: ^3.6.0
