@@ -208,13 +208,15 @@ Plain `dart run`, `dart compile exe` and `dart test` skip that step. The
 first repository you construct then fails loudly with a `StateError` that
 explains this. The ORM never falls back to guessing a mapping.
 
-Generation needs a `ratel_cli` release that supports the ORM runtime
-contract `RatelOrmRuntime.contract` (currently `1`). Until you have one,
-build the definitions by hand and install the manifest yourself with
-`RatelOrmRuntime.install`, as shown under [Testing](#testing).
+Generation needs `ratel_cli` `2.0.0-dev.8` or newer, which supports the ORM
+runtime contract `RatelOrmRuntime.contract` (currently `1`) and checks it
+before generating. [`example/`](example) is a complete program that uses the
+ORM on its own; CI runs it through `ratel test` against Postgres and SQLite
+and through `ratel build`.
 
 **Isolates.** The manifest is installed per isolate. The CLI installs it in
-the main isolate. In an isolate you spawn yourself, call
+the main isolate, and in a Ratel app every isolate `RatelCluster.run`
+spawns gets it too. In an isolate you spawn yourself, call
 `RatelOrmRuntime.install(...)` from `package:ratel_orm/runtime.dart` with the
 same manifest before you construct a repository. Installing the identical
 manifest again does nothing. Installing a different manifest throws a

@@ -46,6 +46,10 @@ jobs:
         run: dart pub get
         working-directory: ratel_orm
 
+      - name: Install the example's dependencies
+        run: dart pub get
+        working-directory: ratel_orm/example
+
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
         working-directory: ratel_orm
@@ -71,4 +75,89 @@ jobs:
 
       - name: Check hygiene
         run: dart run tool/hygiene/bin/check.dart ../ratel_orm
+        working-directory: ratel
+
+  example:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ratel
+          POSTGRES_PASSWORD: ratel
+          POSTGRES_DB: ratel_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ratel_orm
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Ratel-Dart/Ratel
+          ref: develop
+          path: ratel
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.2
+
+      - name: Install SQLite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
+      - name: Compile the ratel CLI
+        run: |
+          dart pub get
+          dart compile exe packages/ratel_cli/bin/ratel.dart -o "$RUNNER_TEMP/ratel"
+        working-directory: ratel
+
+      - name: Install the example's dependencies
+        run: dart pub get
+        working-directory: ratel_orm/example
+
+      - name: Test the example through ratel test against Postgres
+        run: |
+          "$RUNNER_TEMP/ratel" test
+        working-directory: ratel_orm/example
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: ratel_test
+          DB_USER: ratel
+          DB_PASSWORD: ratel
+          DB_SSL_MODE: disable
+
+      - name: Test the example through ratel test against SQLite
+        run: |
+          "$RUNNER_TEMP/ratel" test
+        working-directory: ratel_orm/example
+
+      - name: Build and run the example binary
+        run: |
+          "$RUNNER_TEMP/ratel" build
+          ./build/main
+        working-directory: ratel_orm/example
+
+      - name: Plain dart run must point at the ratel CLI
+        run: |
+          if dart run bin/main.dart > "$RUNNER_TEMP/plain.txt" 2>&1; then
+            cat "$RUNNER_TEMP/plain.txt"
+            exit 1
+          fi
+          grep -q "ratel dev" "$RUNNER_TEMP/plain.txt"
+        working-directory: ratel_orm/example
+
+      - name: Check hygiene of the example and its generated code
+        run: |
+          dart run tool/hygiene/bin/check.dart ../ratel_orm/example
+          dart run tool/hygiene/bin/check.dart ../ratel_orm/example/.dart_tool/ratel
         working-directory: ratel

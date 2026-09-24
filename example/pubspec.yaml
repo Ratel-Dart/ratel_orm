@@ -1,0 +1,14 @@
+name: ratel_orm_example
+description: A Dart program that uses ratel_orm on its own, without the Ratel framework.
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  ratel_orm:
+    path: ..
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.25.0
