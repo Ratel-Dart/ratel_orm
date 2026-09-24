@@ -1,5 +1,9 @@
 ## 0.1.0-dev.1 (unreleased)
 
+- ratel_orm lives in its own repository again,
+  [Ratel-Dart/ratel_orm](https://github.com/Ratel-Dart/ratel_orm), and is no
+  longer a member of the Ratel workspace. The history it gathered there came
+  along with it.
 - PostgresDriver.transaction now rethrows an exception thrown by your action
   unchanged after rolling back, as SqliteDriver does, instead of wrapping it in
   a QueryExecutionException with empty SQL. Queries run through the transaction
