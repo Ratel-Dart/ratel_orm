@@ -18,7 +18,9 @@ class SqliteDriver extends RatelDriver {
 
   Future<void> _idle = Future<void>.value();
 
-  static final Object _holder = Object();
+  final Object _holder = Object();
+
+  late final SqliteSession _session = SqliteSession(_execute);
 
   SqliteDriver(this.path);
 
@@ -55,35 +57,42 @@ class SqliteDriver extends RatelDriver {
   @override
   Future<T> transaction<T>(
     Future<T> Function(RatelSession session) action,
-  ) =>
-      _exclusive(() async {
-        final db = _database;
-        try {
-          db.execute('BEGIN');
-        } on SqliteException catch (e) {
-          throw QueryExecutionException(
-            'SQLite transaction failed',
-            sql: 'BEGIN',
-            cause: e,
-          );
-        }
-        try {
-          final result = await action(SqliteSession(_execute));
-          db.execute('COMMIT');
-          return result;
-        } catch (_) {
-          db.execute('ROLLBACK');
-          rethrow;
-        }
-      });
+  ) async {
+    if (_holding) return action(_session);
+    return _exclusive(() async {
+      final db = _database;
+      try {
+        db.execute('BEGIN');
+      } on SqliteException catch (e) {
+        throw QueryExecutionException(
+          'SQLite transaction failed',
+          sql: 'BEGIN',
+          cause: e,
+        );
+      }
+      try {
+        final result = await action(_session);
+        db.execute('COMMIT');
+        return result;
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
+      }
+    });
+  }
+
+  bool get _holding {
+    final lease = Zone.current[_holder];
+    return lease is Completer<void> && !lease.isCompleted;
+  }
 
   Future<T> _exclusive<T>(Future<T> Function() body) {
-    if (identical(Zone.current[_holder], this)) return body();
+    if (_holding) return body();
     final previous = _idle;
     final released = Completer<void>();
     _idle = released.future;
     return previous
-        .then((_) => runZoned(body, zoneValues: {_holder: this}))
+        .then((_) => runZoned(body, zoneValues: {_holder: released}))
         .whenComplete(released.complete);
   }
 

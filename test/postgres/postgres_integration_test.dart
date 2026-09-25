@@ -132,6 +132,37 @@ void main() {
       await driver.close();
     }, skip: skip);
 
+    test('rolls back when the outer action catches a nested database error',
+        () async {
+      final driver = PostgresDriver.fromEnv();
+      await driver.open();
+
+      await driver.query('DROP TABLE IF EXISTS ratel_tx_widgets');
+      await driver.query('CREATE TABLE ratel_tx_widgets (id int PRIMARY KEY)');
+
+      const insert = 'INSERT INTO ratel_tx_widgets (id) VALUES (@id)';
+      await expectLater(
+        driver.transaction<void>((outer) async {
+          await outer.query(insert, parameters: {'id': 1});
+          try {
+            await driver.transaction(
+              (inner) => inner.query(insert, parameters: {'id': 1}),
+            );
+          } on QueryExecutionException {
+            return;
+          }
+        }),
+        throwsA(isA<QueryExecutionException>()),
+      );
+
+      final count =
+          await driver.query('SELECT count(*) AS total FROM ratel_tx_widgets');
+      expect(count.rows.single['total'], 0);
+
+      await driver.query('DROP TABLE ratel_tx_widgets');
+      await driver.close();
+    }, skip: skip);
+
     test('binds a local DateTime as its instant in timestamp columns',
         () async {
       final driver = PostgresDriver.fromEnv();
@@ -169,5 +200,22 @@ void main() {
 
   group('PostgresDriver conformance against a live server', () {
     DriverConformance.run(PostgresDriver.fromEnv);
+    DriverConformance.nestedTransactions(PostgresDriver.fromEnv);
+  }, skip: skip);
+
+  group('PostgresDriver with a pool of one connection against a live server',
+      () {
+    DriverConformance.nestedTransactions(() {
+      final env = PostgresDriver.fromEnv();
+      return PostgresDriver(
+        host: env.host,
+        port: env.port,
+        databaseName: env.databaseName,
+        username: env.username,
+        password: env.password,
+        sslMode: env.sslMode,
+        maxConnections: 1,
+      );
+    });
   }, skip: skip);
 }

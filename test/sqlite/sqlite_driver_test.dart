@@ -132,6 +132,33 @@ void main() {
     await driver.close();
   });
 
+  test('a transaction begun after the outer one ended runs on its own',
+      () async {
+    final driver = SqliteDriver.memory();
+    await driver.open();
+    addTearDown(driver.close);
+    await driver.query('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+
+    final ended = Completer<void>();
+    late Future<void> afterwards;
+    await driver.transaction((session) async {
+      afterwards = ended.future.then((_) {
+        return driver.transaction<void>((later) async {
+          await later.query('INSERT INTO t (id) VALUES (1)');
+          throw StateError('undo');
+        });
+      });
+    });
+    ended.complete();
+    await expectLater(
+      afterwards.timeout(const Duration(seconds: 5)),
+      throwsStateError,
+    );
+
+    final count = await driver.query('SELECT count(*) AS c FROM t');
+    expect(count.rows.single['c'], 0);
+  });
+
   test('open wraps a native failure in DriverConnectionException', () async {
     final root = await Directory.systemTemp.createTemp('ratel_orm_sqlite_');
     addTearDown(() => root.delete(recursive: true));
@@ -262,5 +289,6 @@ void main() {
   group('driver conformance', () {
     DriverConformance.run(SqliteDriver.memory);
     DriverConformance.parameters(SqliteDriver.memory);
+    DriverConformance.nestedTransactions(SqliteDriver.memory);
   });
 }
