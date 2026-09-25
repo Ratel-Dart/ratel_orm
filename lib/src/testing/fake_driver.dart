@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../dialect/sql_dialect.dart';
 import '../dialect/standard_dialect.dart';
 import '../driver/query_result.dart';
@@ -18,6 +20,8 @@ class FakeDriver extends RatelDriver {
   DatabaseException? errorToThrow;
 
   final List<QueryResult> _queued = [];
+
+  final Object _transaction = Object();
 
   @override
   SqlDialect get dialect => const StandardDialect();
@@ -43,6 +47,19 @@ class FakeDriver extends RatelDriver {
   }
 
   @override
-  Future<T> transaction<T>(Future<T> Function(RatelSession session) action) =>
-      action(FakeSession(this));
+  Future<T> transaction<T>(
+    Future<T> Function(RatelSession session) action,
+  ) async {
+    final open = Zone.current[_transaction];
+    if (open is FakeSession && open.isOpen) return action(open);
+    final session = FakeSession(this);
+    try {
+      return await runZoned(
+        () => action(session),
+        zoneValues: {_transaction: session},
+      );
+    } finally {
+      session.close();
+    }
+  }
 }

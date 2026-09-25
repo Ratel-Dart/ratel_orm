@@ -107,11 +107,16 @@ class PostgresDriver extends RatelDriver {
     return _pool!;
   }
 
+  PostgresSession? get _openSession {
+    final session = Zone.current[_transaction];
+    return session is PostgresSession && session.isOpen ? session : null;
+  }
+
   @override
   Future<QueryResult> query(String sql,
       {Map<String, Object?>? parameters}) async {
-    final session = Zone.current[_transaction];
-    if (session is PostgresSession && session.isOpen) {
+    final session = _openSession;
+    if (session != null) {
       return session.query(sql, parameters: parameters);
     }
     final pool = await _openPool;
@@ -135,6 +140,8 @@ class PostgresDriver extends RatelDriver {
   Future<T> transaction<T>(
     Future<T> Function(RatelSession session) action,
   ) async {
+    final open = _openSession;
+    if (open != null) return action(open);
     final pool = await _openPool;
     String? statement = 'BEGIN';
     try {

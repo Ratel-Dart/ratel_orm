@@ -21,7 +21,8 @@ next to NestJS: the two fit together, and neither needs the other.
 - **Dialect layer**: identifier quoting, `LIMIT`/`OFFSET` and `RETURNING`
   for Postgres and SQLite.
 - **Migrations**: an ordered `Migrator` with a bookkeeping table. Each
-  migration runs in its own transaction.
+  migration runs in its own transaction, or joins the caller's when
+  `migrate` runs inside one.
 - **Drivers**, each in its own sub-library, so each client package is imported
   in only one place:
   - `package:ratel_orm/postgres.dart`: `PostgresDriver`, with a connection
@@ -190,6 +191,30 @@ await driver.transaction((session) async {
 Calls made from anywhere else do not join the transaction. On SQLite they
 wait until it ends. On Postgres they run on another pooled connection.
 
+A `driver.transaction` call made inside the action joins the transaction that
+is already open instead of starting another one, like `REQUIRED` propagation
+in Spring. So a service that opens a transaction can call another service
+that opens one too:
+
+```dart
+Future<void> register(User user) => driver.transaction((session) async {
+      final stored = await users.insert(user);
+      await audit.record(stored.id!);
+    });
+```
+
+If `audit.record` calls `driver.transaction` itself, its action gets the same
+session and runs without a `BEGIN` or `COMMIT` of its own. The outer
+transaction commits the work of both. An exception from the nested action
+propagates, and the outer transaction rolls back everything when it ends with
+that exception. If the outer action catches the exception and completes, the
+transaction still commits, nested writes included: unlike Spring, nothing
+marks it rollback-only. On Postgres a failed statement aborts the whole
+transaction, so after a caught database error it rolls back and
+`transaction` throws. There are no savepoints, so a nested action cannot roll
+back on its own: its writes stand or fall with the outer transaction. A call
+made after the outer transaction has ended does not join it.
+
 ## Mappers come from the ratel CLI
 
 Dart has no reflection under AOT compilation, and this package does not use
@@ -299,7 +324,8 @@ Future<void> main() async {
 `RatelDriver` is a base class that drivers extend, so members can be added
 without breaking them. Every driver follows these rules. The conformance
 suite in this repository checks them against `SqliteDriver` and `FakeDriver`,
-and its basic checks also run against a live `PostgresDriver`:
+and its basic and nested transaction checks also run against a live
+`PostgresDriver`:
 
 - Parameters use named placeholders (`@name`) that match the keys of the
   `parameters` map. With no parameters, the SQL runs verbatim.
@@ -314,6 +340,10 @@ and its basic checks also run against a live `PostgresDriver`:
 - `transaction` runs its action on one connection. It commits when the action
   completes and rolls back when the action throws. Queries sent through the
   driver from inside the action run on that connection too.
+- A `transaction` call from inside the action joins the open transaction. Its
+  action gets the same session and runs without a `BEGIN` or `COMMIT` of its
+  own. An exception it throws propagates to the outer action. Queries and
+  transactions started after the outer transaction has ended do not join it.
 - `dialect` tells the query builder and the repository how to quote
   identifiers and render `LIMIT`, `OFFSET` and `RETURNING`.
 

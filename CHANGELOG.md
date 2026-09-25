@@ -1,5 +1,10 @@
 ## 0.2.0-dev.1 (unreleased)
 
+- Calling `driver.transaction` inside another transaction now joins the open
+  one: the nested action gets the same session, and an exception from it rolls
+  back the whole outer transaction. It used to fail on SQLite, and on Postgres
+  it opened a second connection whose writes escaped the outer rollback, or
+  deadlocked with a pool of one connection.
 - `example/` is a program that uses the ORM without the framework. CI runs
   it through the ratel CLI: `ratel test` against Postgres and SQLite, `ratel
   build` and the built binary, and a plain `dart run` that must fail and point
